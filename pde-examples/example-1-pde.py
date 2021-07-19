@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 import pod as podtools
 
+# Please see main_func(): the other functions are old and will soon be removed.
+
 def try_1():
     #summary = pd.read_csv('/Users/ghobson/Documents/Research/iPOD-SeisSol/pde-examples/data/Advection_1D_k1.0_step_summary.csv')
     summary = pd.read_csv('/Users/ghobson/Documents/Research/iPOD-SeisSol/pde-examples/data/Advection_1D_k1.0_step_pickles.csv')
@@ -126,7 +128,7 @@ def try_2():
     dset = grp.create_dataset('pod', data=x0)
     h5f.close()
 
-def try_3():
+def main_func():
     import sys
     sys.path.append("/Users/ghobson/Documents/Research/pde_solver/togit/pde_solver/")
     import pde_1D_advection as forward_model
@@ -247,4 +249,4 @@ def try_3():
 if __name__ == '__main__':
     # try_1()
     # try_2()
-    try_3()
+    main_func()
