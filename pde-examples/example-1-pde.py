@@ -2,6 +2,7 @@ import numpy as np
 import pickle as pkl
 import pandas as pd
 import h5py
+import matplotlib.pyplot as plt
 
 import pod as podtools
 
@@ -69,7 +70,7 @@ def try_2():
         snap = hf[(snapname)]
         snap = np.array(snap)
         snapshots.append(snap)
-    print(snapshots)
+    #print(snapshots)
 
     controls = dict()
     controls['time'] = list()
@@ -80,7 +81,7 @@ def try_2():
 
     # Build the POD reduced order model
     pod = podtools.PODMultivariate(remove_mean=False)
-    pod.database_append(controls, snapshots) # see pod_base.py
+    pod.database_append(controls, snapshots) # this can be called multiple times, but controls must always be the same
     pod.setup_basis() # this is giving a runtime warning
     pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
 
@@ -106,6 +107,24 @@ def try_2():
     print('m[largest ][rms] =',('%1.4e' % measure[ordering[-1]]))
     print('measure:\n', measure)
     print('snapshot index min/max:', ordering[0], ordering[-1])
+
+    # Evaluate the POD model at an arbitrary instant in time
+    x0 = pod.evaluate([2100.0])
+    #print(x0)
+
+    plt.cla()
+    plt.clf()
+    plt.close()
+    #plt.figure(figsize = (10,10))
+    plt.plot(np.linspace(0,1,len(x0)),x0)
+    plt.show()
+
+    # Push POD data into a new H5 file
+    h5f = h5py.File("pod_eval.h5", "w")
+    grp = h5f.create_group("mesh0/")
+    #dset = h5f.create_dataset("mydataset", (100,), dtype='i')
+    dset = grp.create_dataset('pod', data=x0)
+    h5f.close()
 
 
 if __name__ == '__main__':
