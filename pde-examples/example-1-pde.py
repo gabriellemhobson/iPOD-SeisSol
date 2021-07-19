@@ -184,15 +184,18 @@ def try_3():
     print('snapshot index min/max:', ordering[0], ordering[-1])
     
     # Evaluate the error between the POD model and the forward model at every 200 timesteps
+
     def eval_error(diff,norm_type):
         if norm_type == "l1":
             err = np.linalg.norm(diff,ord=1)
-        if norm_type == "l2":
+        elif norm_type == "l2":
             err = np.linalg.norm(diff)
-        if norm_type == "linf":
+        elif norm_type == "linf":
             err = np.max(np.absolute(diff))
-        if norm_type == "rms":
+        elif norm_type == "rms":
             err = np.linalg.norm(diff) / np.sqrt(float(len(diff)))
+        else: 
+            print('Issue in eval_error()')
         return err
 
     dense_timesteps = np.linspace(0,20000,101,dtype=int)
@@ -205,10 +208,17 @@ def try_3():
         x0 = pod.evaluate([k])
         forward_sol = np.array(pde.load_solution(n=k))
         diff = forward_sol - x0
+        print('max(diff)',max(diff))
         err_l1[m] = eval_error(diff,norm_type="l1")
         err_l2[m] = eval_error(diff,norm_type="l2")
         err_linf[m] = eval_error(diff,norm_type="linf")
         err_rms[m] = eval_error(diff,norm_type="rms")
+
+        print('What is the difference?')
+        print(err_l1[m])
+        print(err_l2[m])
+        print(err_linf[m])
+        print(err_rms[m])
         m += 1
 
     print(np.max(np.abs(err_l1 - err_l2)))
@@ -222,6 +232,17 @@ def try_3():
     plt.ylabel('Error')
     plt.legend(('l1','l2','linf','rms'))
     plt.savefig('error_comparison_pod_vs_forward.png',dpi=400)
+
+    plt.figure()
+    plt.plot(dense_timesteps,ordering[0]*np.ones((len(dense_timesteps))),linestyle='dashed',c='k')
+    plt.plot(dense_timesteps,err_l1,'o',c='blueviolet')
+    plt.plot(dense_timesteps,err_l2,'.',c='royalblue')
+    plt.plot(dense_timesteps,err_linf,'*',c='forestgreen')
+    plt.plot(dense_timesteps,err_rms,'.',c='orangered')
+    plt.xlabel('timesteps')
+    plt.ylabel('Error')
+    plt.legend(('E_LOO','l1','l2','linf','rms'))
+    plt.savefig('error_comparison_with_sup_pod_vs_forward.png',dpi=400)
 
 if __name__ == '__main__':
     # try_1()
