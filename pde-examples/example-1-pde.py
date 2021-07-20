@@ -236,7 +236,7 @@ def main_func():
     plt.savefig('error_comparison_pod_vs_forward.png',dpi=400)
 
     plt.figure()
-    plt.plot(dense_timesteps,ordering[0]*np.ones((len(dense_timesteps))),linestyle='dashed',c='k')
+    plt.plot(dense_timesteps,measure[ordering[-1]]*np.ones((len(dense_timesteps))),linestyle='dashed',c='k')
     plt.plot(dense_timesteps,err_l1,'o',c='blueviolet')
     plt.plot(dense_timesteps,err_l2,'.',c='royalblue')
     plt.plot(dense_timesteps,err_linf,'*',c='forestgreen')
