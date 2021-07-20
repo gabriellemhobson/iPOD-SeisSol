@@ -147,7 +147,7 @@ def main_func():
         snap = pde.load_solution(n=k)
         snap = np.array(snap)
         snapshots.append(snap)
-    print(snapshots)
+    # print(snapshots)
 
     controls = dict()
     controls['time'] = list()
@@ -202,9 +202,9 @@ def main_func():
 
     dense_timesteps = np.linspace(0,20000,101,dtype=int)
     err_l1 = np.zeros((len(dense_timesteps)))
-    err_l2 = err_l1
-    err_linf = err_l1
-    err_rms = err_l1
+    err_l2 = np.zeros((len(dense_timesteps)))
+    err_linf = np.zeros((len(dense_timesteps)))
+    err_rms = np.zeros((len(dense_timesteps)))
     m = 0
     for k in dense_timesteps:
         x0 = pod.evaluate([k])
@@ -215,36 +215,89 @@ def main_func():
         err_l2[m] = eval_error(diff,norm_type="l2")
         err_linf[m] = eval_error(diff,norm_type="linf")
         err_rms[m] = eval_error(diff,norm_type="rms")
-
-        print('What is the difference?')
-        print(err_l1[m])
-        print(err_l2[m])
-        print(err_linf[m])
-        print(err_rms[m])
         m += 1
 
-    print(np.max(np.abs(err_l1 - err_l2)))
+    # compute all the LOOCV errors
+    # seems like l1 isn't integrated yet
+    # measure_l1 = np.absolute(podtools.rbf_loocv(pod, norm_type="l1"))
+    measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
+    measure_linf = np.absolute(podtools.rbf_loocv(pod, norm_type="linf"))
+    measure_rms = np.absolute(podtools.rbf_loocv(pod, norm_type="rms"))
 
+    # colors for plotting
+    color_1 = (213/255,29/255,38/255)
+    color_2 = (251/255,173/255,104/255)
+    color_3 = (49/255,124/255,180/255)
+    color_4 = (94/255,63/255,151/255)
+    color_5 = (17/255,139/255,59/255)
+    color_6 = (165/255,97/255,36/255)
+
+    '''
+    # linear axes plot
     plt.figure()
-    plt.plot(dense_timesteps,err_l1,'o',c='blueviolet')
-    plt.plot(dense_timesteps,err_l2,'.',c='royalblue')
-    plt.plot(dense_timesteps,err_linf,'*',c='forestgreen')
-    plt.plot(dense_timesteps,err_rms,'.',c='orangered')
+    plt.plot(dense_timesteps,np.max(measure_l2)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_1)
+    plt.plot(dense_timesteps,np.max(measure_linf)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_2)
+    plt.plot(dense_timesteps,np.max(measure_rms)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_3)
+    plt.plot(dense_timesteps,err_l1,'.',c=color_4)
+    plt.plot(dense_timesteps,err_l2,'.',c=color_1)
+    plt.plot(dense_timesteps,err_linf,'.',c=color_2)
+    plt.plot(dense_timesteps,err_rms,'.',c=color_3)
     plt.xlabel('timesteps')
     plt.ylabel('Error')
-    plt.legend(('l1','l2','linf','rms'))
-    plt.savefig('error_comparison_pod_vs_forward.png',dpi=400)
+    plt.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
+    plt.savefig('error_comparison_with_llocv.png',dpi=400)
+    '''
+    # semilogy plot
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.plot(dense_timesteps,np.max(measure_l2)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_1)
+    ax.plot(dense_timesteps,np.max(measure_linf)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_2)
+    ax.plot(dense_timesteps,np.max(measure_rms)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_3)
+    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
+    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
+    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
+    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
+    ax.set_xlabel('timesteps')
+    ax.set_ylabel('Log(Error)')
+    ax.set_yscale('log')
+    ax.legend(('sup LOO l2','sup LOO linf','sup LOO rms','l1','l2','linf','rms'))
+    fig.savefig('error_comparison_with_llocv.png',dpi=400)
+    plt.show()
 
-    plt.figure()
-    plt.plot(dense_timesteps,measure[ordering[-1]]*np.ones((len(dense_timesteps))),linestyle='dashed',c='k')
-    plt.plot(dense_timesteps,err_l1,'o',c='blueviolet')
-    plt.plot(dense_timesteps,err_l2,'.',c='royalblue')
-    plt.plot(dense_timesteps,err_linf,'*',c='forestgreen')
-    plt.plot(dense_timesteps,err_rms,'.',c='orangered')
-    plt.xlabel('timesteps')
-    plt.ylabel('Error')
-    plt.legend(('E_LOO','l1','l2','linf','rms'))
-    plt.savefig('error_comparison_with_sup_pod_vs_forward.png',dpi=400)
+    # semilogy plot with measures
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.plot(timesteps,measure_l2,linestyle='dashed',c=color_1)
+    ax.plot(timesteps,measure_linf,linestyle='dashed',c=color_2)
+    ax.plot(timesteps,measure_rms,linestyle='dashed',c=color_3)
+    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
+    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
+    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
+    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
+    ax.set_xlabel('timesteps')
+    ax.set_ylabel('Log(Error)')
+    ax.set_yscale('log')
+    ax.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
+    fig.savefig('error_comparison_with_measures.png',dpi=400)
+    plt.show()
+
+    # semilogy plot with restricted ylim
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.plot(timesteps,measure_l2,marker='*',c=color_1)
+    ax.plot(timesteps,measure_linf,marker='*',c=color_2)
+    ax.plot(timesteps,measure_rms,marker='*',c=color_3)
+    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
+    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
+    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
+    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
+    ax.set_xlabel('timesteps')
+    ax.set_ylabel('Log(Error)')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-5,1e1)
+    ax.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
+    fig.savefig('error_comparison_with_measures_ylimsm.png',dpi=400)
+    plt.show()
 
 if __name__ == '__main__':
     # try_1()
