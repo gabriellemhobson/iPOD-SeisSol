@@ -13,14 +13,22 @@ def main_func():
     import pdebase as pdebase
 
     # run the forward model, this will solve the forward model and save every 200 timesteps using pdebase
-    #forward_model.calling_advection_1d()
+    # forward_model.calling_advection_1d()
 
     # pde = pdebase.PDEBase('Advection_1D', ['k'], [1.0])
     pde = pdebase.PDEBaseLoadCheckpointFile('Advection_1D_k1.0_step20000.pkl') # Load a checkpoint from a file - avoids having to remember what parameter values were used.
-    print(pde)
+    print(pde.checkpoints)
+
+    timesteps = []
+    times = []
+    for tuple in pde.checkpoints:
+        timesteps.append(tuple[0])
+        times.append(tuple[1])
+    print('timesteps',timesteps)
+    print('times',times)
     
     # now to load some of the solutions we saved, every 1000 timesteps
-    timesteps = np.linspace(0,20000,21,dtype=int)
+    #timesteps = np.linspace(0,20000,21,dtype=int)
     snapshots = list()
     for k in timesteps:
         snap = pde.load_solution(n=k)
@@ -89,7 +97,6 @@ def main_func():
         x0 = pod.evaluate([k])
         forward_sol = np.array(pde.load_solution(n=k))
         diff = forward_sol - x0
-        print('max(diff)',max(diff))
         err_l1[m] = eval_error(diff,norm_type="l1")
         err_l2[m] = eval_error(diff,norm_type="l2")
         err_linf[m] = eval_error(diff,norm_type="linf")
