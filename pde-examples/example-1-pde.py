@@ -19,27 +19,38 @@ def main_func():
     pde = pdebase.PDEBaseLoadCheckpointFile('Advection_1D_k1.0_step20000.pkl') # Load a checkpoint from a file - avoids having to remember what parameter values were used.
     print(pde.checkpoints)
 
+    # get time from pde.checkpoints to use in controls
     timesteps = []
     times = []
     for tuple in pde.checkpoints:
         timesteps.append(tuple[0])
         times.append(tuple[1])
-    print('timesteps',timesteps)
-    print('times',times)
+    # print('timesteps',timesteps)
+    # print('times',times)
+
+    # print('timesteps len',len(timesteps))
+    # print('times len',len(times))
     
     # now to load some of the solutions we saved, every 1000 timesteps
     #timesteps = np.linspace(0,20000,21,dtype=int)
+    #timesteps_selected = [t for t in timesteps if t % 1000 == 0]
+    timesteps_selected = []
+    times_selected = []
+    for k in range(len(timesteps)):
+        if timesteps[k] % 1000 == 0:
+            timesteps_selected.append(timesteps[k])
+            times_selected.append(times[k])
+
     snapshots = list()
-    for k in timesteps:
+    for k in timesteps_selected:
         snap = pde.load_solution(n=k)
         snap = np.array(snap)
         snapshots.append(snap)
-    # print(snapshots)
+    print('len(snapshots)',len(snapshots))
 
     controls = dict()
     controls['time'] = list()
-    for t in timesteps:
-        t = int(t)
+    for t in times_selected:
         controls['time'].append(t)
     print(controls)
 
@@ -56,7 +67,7 @@ def main_func():
     # LOOCV measures
     measure = podtools.rbf_loocv(pod, norm_type="linf")
     measure = np.absolute(measure)
-
+    
     ordering = np.argsort(measure)
     print('m[smallest][Linf] =',('%1.4e' % measure[ordering[0]]))
     print('m[largest ][Linf] =',('%1.4e' % measure[ordering[-1]]))
@@ -71,7 +82,7 @@ def main_func():
     print('m[largest ][rms] =',('%1.4e' % measure[ordering[-1]]))
     print('measure:\n', measure)
     print('snapshot index min/max:', ordering[0], ordering[-1])
-    
+
     # Evaluate the error between the POD model and the forward model at every 200 timesteps
 
     def eval_error(diff,norm_type):
@@ -87,15 +98,14 @@ def main_func():
             print('Issue in eval_error()')
         return err
 
-    dense_timesteps = np.linspace(0,20000,101,dtype=int)
-    err_l1 = np.zeros((len(dense_timesteps)))
-    err_l2 = np.zeros((len(dense_timesteps)))
-    err_linf = np.zeros((len(dense_timesteps)))
-    err_rms = np.zeros((len(dense_timesteps)))
+    err_l1 = np.zeros((len(times)))
+    err_l2 = np.zeros((len(times)))
+    err_linf = np.zeros((len(times)))
+    err_rms = np.zeros((len(times)))
     m = 0
-    for k in dense_timesteps:
-        x0 = pod.evaluate([k])
-        forward_sol = np.array(pde.load_solution(n=k))
+    for k in range((len(timesteps))):
+        x0 = pod.evaluate([times[k]])
+        forward_sol = np.array(pde.load_solution(n=timesteps[k]))
         diff = forward_sol - x0
         err_l1[m] = eval_error(diff,norm_type="l1")
         err_l2[m] = eval_error(diff,norm_type="l2")
@@ -121,14 +131,14 @@ def main_func():
     # semilogy plot
     fig = plt.figure()
     ax = plt.gca()
-    ax.plot(dense_timesteps,np.max(measure_l2)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_1)
-    ax.plot(dense_timesteps,np.max(measure_linf)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_2)
-    ax.plot(dense_timesteps,np.max(measure_rms)*np.ones((len(dense_timesteps))),linestyle='dashed',c=color_3)
-    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
-    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
-    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
-    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
-    ax.set_xlabel('timesteps')
+    ax.plot(times,np.max(measure_l2)*np.ones((len(times))),linestyle='dashed',c=color_1)
+    ax.plot(times,np.max(measure_linf)*np.ones((len(times))),linestyle='dashed',c=color_2)
+    ax.plot(times,np.max(measure_rms)*np.ones((len(times))),linestyle='dashed',c=color_3)
+    ax.plot(times,err_l1,'.',c=color_4)
+    ax.plot(times,err_l2,'.',c=color_1)
+    ax.plot(times,err_linf,'.',c=color_2)
+    ax.plot(times,err_rms,'.',c=color_3)
+    ax.set_xlabel('t')
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
     ax.legend(('sup LOO l2','sup LOO linf','sup LOO rms','l1','l2','linf','rms'))
@@ -138,14 +148,14 @@ def main_func():
     # semilogy plot with measures
     fig = plt.figure()
     ax = plt.gca()
-    ax.plot(timesteps,measure_l2,linestyle='dashed',c=color_1)
-    ax.plot(timesteps,measure_linf,linestyle='dashed',c=color_2)
-    ax.plot(timesteps,measure_rms,linestyle='dashed',c=color_3)
-    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
-    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
-    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
-    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
-    ax.set_xlabel('timesteps')
+    ax.plot(times_selected,measure_l2,linestyle='dashed',c=color_1)
+    ax.plot(times_selected,measure_linf,linestyle='dashed',c=color_2)
+    ax.plot(times_selected,measure_rms,linestyle='dashed',c=color_3)
+    ax.plot(times,err_l1,'.',c=color_4)
+    ax.plot(times,err_l2,'.',c=color_1)
+    ax.plot(times,err_linf,'.',c=color_2)
+    ax.plot(times,err_rms,'.',c=color_3)
+    ax.set_xlabel('t')
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
     ax.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
@@ -155,14 +165,14 @@ def main_func():
     # semilogy plot with restricted ylim
     fig = plt.figure()
     ax = plt.gca()
-    ax.plot(timesteps,measure_l2,marker='*',c=color_1)
-    ax.plot(timesteps,measure_linf,marker='*',c=color_2)
-    ax.plot(timesteps,measure_rms,marker='*',c=color_3)
-    ax.plot(dense_timesteps,err_l1,'.',c=color_4)
-    ax.plot(dense_timesteps,err_l2,'.',c=color_1)
-    ax.plot(dense_timesteps,err_linf,'.',c=color_2)
-    ax.plot(dense_timesteps,err_rms,'.',c=color_3)
-    ax.set_xlabel('timesteps')
+    ax.plot(times_selected,measure_l2,marker='*',c=color_1)
+    ax.plot(times_selected,measure_linf,marker='*',c=color_2)
+    ax.plot(times_selected,measure_rms,marker='*',c=color_3)
+    ax.plot(times,err_l1,'.',c=color_4)
+    ax.plot(times,err_l2,'.',c=color_1)
+    ax.plot(times,err_linf,'.',c=color_2)
+    ax.plot(times,err_rms,'.',c=color_3)
+    ax.set_xlabel('t')
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
     ax.set_ylim(1e-5,1e1)
