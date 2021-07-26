@@ -116,6 +116,7 @@ def main_func():
     # compute all the LOOCV errors
     # seems like l1 isn't integrated yet
     # measure_l1 = np.absolute(podtools.rbf_loocv(pod, norm_type="l1"))
+    measure_l1 = np.absolute(podtools.rbf_loocv(pod, norm_type="l1"))
     measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
     measure_linf = np.absolute(podtools.rbf_loocv(pod, norm_type="linf"))
     measure_rms = np.absolute(podtools.rbf_loocv(pod, norm_type="rms"))
@@ -131,6 +132,7 @@ def main_func():
     # semilogy plot
     fig = plt.figure()
     ax = plt.gca()
+    ax.plot(times,np.max(measure_l1)*np.ones((len(times))),linestyle='dashed',c=color_4)
     ax.plot(times,np.max(measure_l2)*np.ones((len(times))),linestyle='dashed',c=color_1)
     ax.plot(times,np.max(measure_linf)*np.ones((len(times))),linestyle='dashed',c=color_2)
     ax.plot(times,np.max(measure_rms)*np.ones((len(times))),linestyle='dashed',c=color_3)
@@ -141,13 +143,14 @@ def main_func():
     ax.set_xlabel('t')
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
-    ax.legend(('sup LOO l2','sup LOO linf','sup LOO rms','l1','l2','linf','rms'))
+    ax.legend(('sup LOO l1','sup LOO l2','sup LOO linf','sup LOO rms','l1','l2','linf','rms'))
     fig.savefig('error_comparison_with_llocv.png',dpi=400)
     plt.show()
 
     # semilogy plot with measures
     fig = plt.figure()
     ax = plt.gca()
+    ax.plot(times_selected,measure_l1,linestyle='dashed',c=color_4)
     ax.plot(times_selected,measure_l2,linestyle='dashed',c=color_1)
     ax.plot(times_selected,measure_linf,linestyle='dashed',c=color_2)
     ax.plot(times_selected,measure_rms,linestyle='dashed',c=color_3)
@@ -158,13 +161,14 @@ def main_func():
     ax.set_xlabel('t')
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
-    ax.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
+    ax.legend(('LOO l1','LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
     fig.savefig('error_comparison_with_measures.png',dpi=400)
     plt.show()
 
     # semilogy plot with restricted ylim
     fig = plt.figure()
     ax = plt.gca()
+    ax.plot(times_selected,measure_l1,marker='*',c=color_4)
     ax.plot(times_selected,measure_l2,marker='*',c=color_1)
     ax.plot(times_selected,measure_linf,marker='*',c=color_2)
     ax.plot(times_selected,measure_rms,marker='*',c=color_3)
@@ -176,7 +180,7 @@ def main_func():
     ax.set_ylabel('Log(Error)')
     ax.set_yscale('log')
     ax.set_ylim(1e-5,1e1)
-    ax.legend(('LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
+    ax.legend(('LOO l1','LOO l2','LOO linf','LOO rms','l1','l2','linf','rms'))
     fig.savefig('error_comparison_with_measures_ylimsm.png',dpi=400)
     plt.show()
 
