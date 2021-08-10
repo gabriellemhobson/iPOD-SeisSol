@@ -452,7 +452,7 @@ def excluding_ic():
 
     # run the forward model, this will solve the forward model and save every 200 timesteps using pdebase
     checkpoint_freq = 200
-    #forward_model.calling_advection_1d(checkpoint_frequency_in=checkpoint_freq)
+    forward_model.calling_advection_1d(checkpoint_frequency_in=checkpoint_freq)
     
     # pde = pdebase.PDEBase('Advection_1D', ['k'], [1.0])
     pde = pdebase.PDEBaseLoadCheckpointFile('Advection_1D_k1.0_step20000.pkl') # Load a checkpoint from a file - avoids having to remember what parameter values were used.
@@ -474,7 +474,7 @@ def excluding_ic():
             times_selected.append(times[k])
 
     # removing the initial condition, starting at N
-    N = 4000
+    N = 1000
     start = int(N/checkpoint_freq)
     timesteps_new = timesteps[start:]
     times_new = times[start:]
@@ -597,7 +597,7 @@ def excluding_ic():
     ax0.set_ylabel('Log(Error)')
     ax0.set_yscale('log')
     ax0.set_ylim(1e-5,5e1)
-    ax0.legend(('LOO l1, including ic','LOO l1, excluding ic','l1, including ic','l1, excluding ic'))
+    ax0.legend(('LOO l1, including ic','LOO l1, excluding ic','l1, including ic','l1, excluding ic'),loc='upper right')
 
     ax1.plot(times_selected,measure_l2,marker='*',c=color_1)
     ax1.plot(times_selected_new,measure_l2_new,marker='^',c='k')
@@ -607,7 +607,7 @@ def excluding_ic():
     ax1.set_ylabel('Log(Error)')
     ax1.set_yscale('log')
     ax1.set_ylim(1e-5,5e1)
-    ax1.legend(('LOO l2, including ic','LOO l2, excluding ic','l2, including ic','l2, excluding ic'))
+    ax1.legend(('LOO l2, including ic','LOO l2, excluding ic','l2, including ic','l2, excluding ic'),loc='upper right')
 
     ax2.plot(times_selected,measure_linf,marker='*',c=color_2)
     ax2.plot(times_selected_new,measure_linf_new,marker='^',c='k')
@@ -617,19 +617,19 @@ def excluding_ic():
     ax2.set_ylabel('Log(Error)')
     ax2.set_yscale('log')
     ax2.set_ylim(1e-5,5e1)
-    ax2.legend(('LOO linf, including ic','LOO linf, excluding ic','linf, including ic','linf, excluding ic'))
+    ax2.legend(('LOO linf, including ic','LOO linf, excluding ic','linf, including ic','linf, excluding ic'),loc='upper right')
 
     ax3.plot(times_selected,measure_rms,marker='*',c=color_3)
-    ax3.plot(times_selected,measure_rms,marker='^',c='k')
+    ax3.plot(times_selected_new,measure_rms_new,marker='^',c='k')
     ax3.plot(times,err_rms,'.',c=color_3)
     ax3.plot(times_new,err_rms_new,'.',c='k')
     ax3.set_xlabel('t')
     ax3.set_ylabel('Log(Error)')
     ax3.set_yscale('log')
     ax3.set_ylim(1e-5,5e1)
-    ax3.legend(('LOO rms, including ic','LOO rms, excluding ic','rms, including ic','rms, excluding ic'))
+    ax3.legend(('LOO rms, including ic','LOO rms, excluding ic','rms, including ic','rms, excluding ic'),loc='upper right')
 
-    #fig.savefig('errors_excluding_ic_1000.png',dpi=400)
+    # fig.savefig('errors_excluding_ic_4000.png',dpi=400)
     plt.show()
 
 if __name__ == '__main__':
