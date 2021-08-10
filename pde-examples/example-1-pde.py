@@ -1,3 +1,4 @@
+from time import time
 import numpy as np
 import pickle as pkl
 import pandas as pd
@@ -50,7 +51,7 @@ def main_func():
     # Build the POD reduced order model
     pod = podtools.PODMultivariate(remove_mean=False)
     pod.database_append(controls, snapshots) # this can be called multiple times, but controls must always be the same
-    pod.setup_basis() # this is giving a runtime warning
+    pod.setup_basis()
     pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
 
     print('Singular values:\n', pod.singular_values)
@@ -343,6 +344,273 @@ def adaptive():
             break 
         # rinse and repeat until all LOOCV errors are below tolerance
 
+def adaptive_v2():
+    import sys
+    sys.path.append("/Users/ghobson/Documents/Research/pde_solver/togit/pde_solver/")
+    import pde_1D_advection as forward_model
+    import pdebase as pdebase
+
+    color_1 = (213/255,29/255,38/255)
+    color_2 = (251/255,173/255,104/255)
+    color_3 = (49/255,124/255,180/255)
+    color_4 = (94/255,63/255,151/255)
+
+    def eval_error(diff,norm_type):
+        if norm_type == "l1":
+            err = np.linalg.norm(diff,ord=1)
+        elif norm_type == "l2":
+            err = np.linalg.norm(diff)
+        elif norm_type == "linf":
+            err = np.max(np.absolute(diff))
+        elif norm_type == "rms":
+            err = np.linalg.norm(diff) / np.sqrt(float(len(diff)))
+        else: 
+            print('Issue in eval_error()')
+        return err
+
+    # run the forward model, this will solve the forward model and save every 200 timesteps using pdebase
+    checkpoint_freq = 10
+    # forward_model.calling_advection_1d(checkpoint_frequency_in=checkpoint_freq)
+    
+    # pde = pdebase.PDEBase('Advection_1D', ['k'], [1.0])
+    pde = pdebase.PDEBaseLoadCheckpointFile('Advection_1D_k1.0_step20000.pkl') # Load a checkpoint from a file - avoids having to remember what parameter values were used.
+    print(pde.checkpoints)
+
+    # get time from pde.checkpoints to use in controls
+    timesteps = []
+    times = []
+    for tuple in pde.checkpoints:
+        timesteps.append(tuple[0])
+        times.append(tuple[1])
+
+    # Dict with boolean for whether snapshot is included in basis
+    include = dict()
+    for t in times:
+        include[str(t)] = list()
+        include[str(t)].append(0)
+    
+    # set up an initial basis with just 10 snapshots (say)
+    timesteps_selected = []
+    times_selected = []
+    for k in range(len(timesteps)):
+        if timesteps[k] % 2000 == 0:
+            timesteps_selected.append(timesteps[k])
+            times_selected.append(times[k])
+    print('len(timesteps_selected)',len(timesteps_selected))
+
+    snapshots = list()
+    for k in timesteps_selected:
+        snap = pde.load_solution(n=k)
+        snap = np.array(snap)
+        snapshots.append(snap)
+    print('len(snapshots)',len(snapshots))
+
+    controls = dict()
+    controls['time'] = list()
+    for t in times_selected:
+        controls['time'].append(t)
+    print(controls)
+
+    # let the include/exclude dict know what we currently have in our basis
+    count = 0
+    for k in times:
+        for j in times_selected:
+            if str(k) == str(j):
+                include[str(k)] = 1
+                count += 1
+    print('count',count)
+
+    # Build the initial POD reduced order model
+    pod = podtools.PODMultivariate(remove_mean=False)
+    pod.database_append(controls, snapshots) # this can be called multiple times, but controls must always be the same
+    pod.setup_basis() # this is giving a runtime warning
+    pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
+
+    # compute and plot initial error before starting adaptivity
+    measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.scatter(times_selected,measure_l2,marker='.',color=color_1)
+    ax.set_xlabel('t')
+    ax.set_ylabel('Log(Error)')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-5,1e1)
+    #ax.legend(('LOO l2'))
+    ax.set_title('LOOCV l2 error, POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
+    fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
+    plt.show()  
+
+    while np.max(measure_l2) >= 2e-1:
+        # is this phi_normalized the correct matrix? V  in the paper's notation?
+        print('pod.svd results, size',np.shape(pod.phi_normalized))
+        u = pod.phi_normalized
+        # compute projection where p is a snapshot
+        err_keep = 0
+        for k in range(len(timesteps)):
+            p = pde.load_solution(n=timesteps[k])
+            err = np.linalg.norm(p - u @ u.transpose() @ p)/np.linalg.norm(p)
+            print(('%1.4e'%err))
+            if err > err_keep:
+                err_keep = err
+                snap_to_add = p
+                time_to_add = times[k]
+                timestep_to_add = timesteps[k]
+        print('err_keep',err_keep)
+
+        # add the snapshot with the max error to the data matrix, update controls and times_selected and timesteps_selected
+        snapshots.append(snap_to_add)
+        controls['time'].append(time_to_add)
+        timesteps_selected.append(timestep_to_add)
+        times_selected.append(time_to_add)
+        # update the include dict
+        include[str(time_to_add)] = [1]
+        # compute the new pod basis
+        del pod # clearing pod just to be sure?
+        pod = podtools.PODMultivariate(remove_mean=False)
+        pod.database_append(controls, snapshots)
+        pod.setup_basis()
+        pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
+
+        print('np.shape(pod.phi_normalized)[1]',np.shape(pod.phi_normalized)[1])
+
+        # compute and plot errors
+        measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
+        fig = plt.figure()
+        ax = plt.gca()
+        ax.scatter(times_selected,measure_l2,marker='.',color=color_1)
+        ax.set_xlabel('t')
+        ax.set_ylabel('Log(Error)')
+        ax.set_yscale('log')
+        ax.set_ylim(1e-5,1e1)
+        #ax.legend(('LOO l2'))
+        ax.set_title('LOOCV l2 error, POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
+        fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
+
+    return 
+
+def rbf_experiment():
+    import sys
+    sys.path.append("/Users/ghobson/Documents/Research/pde_solver/togit/pde_solver/")
+    import pde_1D_advection as forward_model
+    import pdebase as pdebase
+
+    # run the forward model, this will solve the forward model and save every 200 timesteps using pdebase
+    #forward_model.calling_advection_1d(checkpoint_frequency_in=20)
+
+    pde = pdebase.PDEBaseLoadCheckpointFile('Advection_1D_k1.0_step20000.pkl') # Load a checkpoint from a file - avoids having to remember what parameter values were used.
+    print(pde.checkpoints)
+
+    # get time from pde.checkpoints to use in controls
+    timesteps = []
+    times = []
+    for tuple in pde.checkpoints:
+        timesteps.append(tuple[0])
+        times.append(tuple[1])
+    
+    # now to load some of the solutions we saved, every 10 timesteps
+    timesteps_selected = []
+    times_selected = []
+    for k in range(len(timesteps)):
+        if timesteps[k] % 10 == 0:
+            timesteps_selected.append(timesteps[k])
+            times_selected.append(times[k])
+
+    snapshots = list()
+    for k in timesteps_selected:
+        snap = pde.load_solution(n=k)
+        snap = np.array(snap)
+        snapshots.append(snap)
+    print('len(snapshots)',len(snapshots))
+
+    controls = dict()
+    controls['time'] = list()
+    for t in times_selected:
+        controls['time'].append(t)
+    print(controls)
+
+    # POD Basis process
+    def build_pod_basis(controls,snapshots,rbf_type_in):
+        pod = podtools.PODMultivariate(remove_mean=False)
+        pod.database_append(controls, snapshots)
+        pod.setup_basis()
+        pod.setup_interpolant(rbf_type=rbf_type_in, bounds_auto=True)
+        return pod
+
+    # build POD basis for different rbf types
+    pod_gauss = build_pod_basis(controls,snapshots,rbf_type_in='gauss') # Gauss
+    pod_tps = build_pod_basis(controls,snapshots,rbf_type_in='tps') # Thin Plate Spline
+    pod_polyh = build_pod_basis(controls,snapshots,rbf_type_in='polyh') # Polyhedral
+    pod_mq = build_pod_basis(controls,snapshots,rbf_type_in='mq') # Multiquadratic
+
+    # choose a norm type and compute all the LOOCV errors
+    norm = "l2"
+    measure_gauss = np.absolute(podtools.rbf_loocv(pod_gauss, norm_type=norm))
+    measure_tps = np.absolute(podtools.rbf_loocv(pod_tps, norm_type=norm))
+    measure_polyh = np.absolute(podtools.rbf_loocv(pod_polyh, norm_type=norm))
+    measure_mq = np.absolute(podtools.rbf_loocv(pod_mq, norm_type=norm))
+
+    # Evaluate the error between the POD model and the forward model at every 200 timesteps
+
+    def eval_error(diff,norm_type):
+        if norm_type == "l1":
+            err = np.linalg.norm(diff,ord=1)
+        elif norm_type == "l2":
+            err = np.linalg.norm(diff)
+        elif norm_type == "linf":
+            err = np.max(np.absolute(diff))
+        elif norm_type == "rms":
+            err = np.linalg.norm(diff) / np.sqrt(float(len(diff)))
+        else: 
+            print('Issue in eval_error()')
+        return err
+
+    err_gauss = np.zeros((len(times)))
+    err_tps= np.zeros((len(times)))
+    err_polyh = np.zeros((len(times)))
+    err_mq = np.zeros((len(times)))
+   
+    def true_error(err,pod):
+        m = 0
+        for k in range((len(timesteps))):
+            x0 = pod.evaluate([times[k]])
+            forward_sol = np.array(pde.load_solution(n=timesteps[k]))
+            diff = forward_sol - x0
+            err[m] = eval_error(diff,norm_type="l2")
+            m += 1
+        return err
+
+    err_gauss = true_error(err_gauss,pod_gauss)
+    print('err_gauss',err_gauss)
+    err_tps= true_error(err_tps,pod_tps)
+    err_polyh = true_error(err_polyh,pod_polyh)
+    err_mq = true_error(err_mq,pod_mq)
+
+    # colors for plotting (from Matti's palette)
+    color_1 = (213/255,29/255,38/255)
+    color_2 = (251/255,173/255,104/255)
+    color_3 = (49/255,124/255,180/255)
+    color_4 = (94/255,63/255,151/255)
+    color_5 = (17/255,139/255,59/255)
+    color_6 = (165/255,97/255,36/255)
+
+    # semilogy plot with restricted ylim
+    fig = plt.figure()
+    ax = plt.gca()
+    ax.plot(times_selected,measure_gauss,marker='*',c=color_4)
+    ax.plot(times_selected,measure_tps,marker='*',c=color_1)
+    ax.plot(times_selected,measure_polyh,marker='*',c=color_2)
+    ax.plot(times_selected,measure_mq,marker='*',c=color_3)
+    ax.plot(times,err_gauss,'.',c=color_4)
+    ax.plot(times,err_tps,'.',c=color_1)
+    ax.plot(times,err_polyh,'.',c=color_2)
+    ax.plot(times,err_mq,'.',c=color_3)
+    ax.set_xlabel('t')
+    ax.set_ylabel('Log(Error)')
+    ax.set_yscale('log')
+    ax.set_ylim(1e-5,1e1)
+    ax.legend(('LOOCV l2 - Gauss','LOOCV l2 - TPS','LOOCV l2 - Polyh','LOOCV l2 - MQ','True l2 err - Gauss','True l2 err - TPS','True l2 err - Polyh','True l2 err - MQ'))
+    fig.savefig('rbf_experiment_l2.png',dpi=400)
+    plt.show()
 
 def excluding_ic():
     import sys
@@ -378,7 +646,7 @@ def excluding_ic():
     start = int(N/checkpoint_freq)
     timesteps_new = timesteps[start:]
     times_new = times[start:]
-    
+
     selected_freq = 1000
     start_selected = int(N/selected_freq)
     timesteps_selected_new = timesteps_selected[start_selected:]
@@ -534,5 +802,6 @@ def excluding_ic():
 
 if __name__ == '__main__':
     # main_func()
-    # adaptive()
-    excluding_ic()
+    adaptive_v2()
+    # rbf_experiment()
+    # excluding_ic()
