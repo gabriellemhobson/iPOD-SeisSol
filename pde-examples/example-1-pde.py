@@ -261,17 +261,27 @@ def adaptive():
     # compute and plot initial error before starting adaptivity
     measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
     fig = plt.figure()
-    ax = plt.gca()
-    ax.scatter(times_selected,measure_l2,marker='.',color=color_1)
-    ax.set_xlabel('t')
-    ax.set_ylabel('Log(Error)')
-    ax.set_yscale('log')
-    ax.set_ylim(1e-5,1e1)
+    ax1 = plt.gca()
+    #ax1.scatter(times,err,marker='.',color=color_1)
+    ax1.set_xlabel('t')
+    ax1.set_ylabel('Log(||p - U U^T p||/||p||)',color=color_1)
+    ax1.set_yscale('log')
+    ax1.set_ylim(1e-16,1e0)
     #ax.legend(('LOO l2'))
-    ax.set_title('LOOCV l2 error, POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
-    fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
-    plt.show()  
+    ax1.tick_params(axis='y', labelcolor=color_1)
+    ax1.set_title('POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
 
+    ax2 = ax1.twinx()
+    ax2.scatter(times_selected,measure_l2,marker='^',color=color_3)
+    ax2.set_ylabel('Log(LOOCV l2 Error)',color=color_3)
+    ax2.set_yscale('log')
+    ax2.set_ylim(1e-5,1e1)
+    ax2.tick_params(axis='y', labelcolor=color_3)
+
+    fig.tight_layout()
+    fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)  
+
+    err = np.zeros(len(timesteps))
     while np.max(measure_l2) >= 2e-1:
         # is this phi_normalized the correct matrix? V  in the paper's notation?
         print('pod.svd results, size',np.shape(pod.phi_normalized))
@@ -280,43 +290,54 @@ def adaptive():
         err_keep = 0
         for k in range(len(timesteps)):
             p = pde.load_solution(n=timesteps[k])
-            err = np.linalg.norm(p - u @ u.transpose() @ p)/np.linalg.norm(p)
-            print(('%1.4e'%err))
-            if err > err_keep:
-                err_keep = err
+            err[k] = np.linalg.norm(p - u @ u.transpose() @ p)/np.linalg.norm(p)
+            print(('%1.4e'%err[k]))
+            if err[k] > err_keep:
+                err_keep = err[k]
                 snap_to_add = p
                 time_to_add = times[k]
                 timestep_to_add = timesteps[k]
         print('err_keep',err_keep)
 
         # add the snapshot with the max error to the data matrix, update controls and times_selected and timesteps_selected
-        snapshots.append(snap_to_add)
-        controls['time'].append(time_to_add)
-        timesteps_selected.append(timestep_to_add)
-        times_selected.append(time_to_add)
-        # update the include dict
-        include[str(time_to_add)] = [1]
-        # compute the new pod basis
-        del pod # clearing pod just to be sure?
-        pod = podtools.PODMultivariate(remove_mean=False)
-        pod.database_append(controls, snapshots)
-        pod.setup_basis()
-        pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
+        if include[str(time_to_add)] == [0]:
+            snapshots.append(snap_to_add)
+            controls['time'].append(time_to_add)
+            timesteps_selected.append(timestep_to_add)
+            times_selected.append(time_to_add)
+            # update the include dict
+            include[str(time_to_add)] = [1]
+            # compute the new pod basis
+            del pod # clearing pod just to be sure?
+            pod = podtools.PODMultivariate(remove_mean=False)
+            pod.database_append(controls, snapshots)
+            pod.setup_basis()
+            pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
 
-        print('np.shape(pod.phi_normalized)[1]',np.shape(pod.phi_normalized)[1])
+            print('np.shape(pod.phi_normalized)[1]',np.shape(pod.phi_normalized)[1])
 
-        # compute and plot errors
-        measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
-        fig = plt.figure()
-        ax = plt.gca()
-        ax.scatter(times_selected,measure_l2,marker='.',color=color_1)
-        ax.set_xlabel('t')
-        ax.set_ylabel('Log(Error)')
-        ax.set_yscale('log')
-        ax.set_ylim(1e-5,1e1)
-        #ax.legend(('LOO l2'))
-        ax.set_title('LOOCV l2 error, POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
-        fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
+            # compute and plot errors
+            measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
+            fig = plt.figure()
+            ax1 = plt.gca()
+            ax1.scatter(times,err,marker='.',color=color_1)
+            ax1.set_xlabel('t')
+            ax1.set_ylabel('Log(||p - U U^T p||/||p||)',color=color_1)
+            ax1.set_yscale('log')
+            ax1.set_ylim(1e-16,1e0)
+            #ax.legend(('LOO l2'))
+            ax1.tick_params(axis='y', labelcolor=color_1)
+            ax1.set_title('POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
+
+            ax2 = ax1.twinx()
+            ax2.scatter(times_selected,measure_l2,marker='^',color=color_3)
+            ax2.set_ylabel('Log(LOOCV l2 Error)',color=color_3)
+            ax2.set_yscale('log')
+            ax2.set_ylim(1e-5,1e1)
+            ax2.tick_params(axis='y', labelcolor=color_3)
+
+            fig.tight_layout()
+            fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
 
     return 
 
