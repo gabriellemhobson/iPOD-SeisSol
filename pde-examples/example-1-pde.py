@@ -187,6 +187,11 @@ def adaptive():
     color_3 = (49/255,124/255,180/255)
     color_4 = (94/255,63/255,151/255)
 
+    def maxN(elements, n):
+        max_vals = sorted(elements, reverse=True)[:n]
+        indices = np.argsort(elements)[len(elements)-n:]
+        return max_vals,indices
+
     def eval_error(diff,norm_type):
         if norm_type == "l1":
             err = np.linalg.norm(diff,ord=1)
@@ -249,7 +254,7 @@ def adaptive():
         for j in times_selected:
             if str(k) == str(j):
                 include[str(k)] = 1
-                count += 1
+                count + 1
     print('count',count)
 
     # Build the initial POD reduced order model
@@ -287,58 +292,85 @@ def adaptive():
         print('pod.svd results, size',np.shape(pod.phi_normalized))
         u = pod.phi_normalized
         # compute projection where p is a snapshot
-        err_keep = 0
+        p = np.zeros((len(u),len(timesteps)))
         for k in range(len(timesteps)):
-            p = pde.load_solution(n=timesteps[k])
-            err[k] = np.linalg.norm(p - u @ u.transpose() @ p)/np.linalg.norm(p)
-            print(('%1.4e'%err[k]))
-            if err[k] > err_keep:
-                err_keep = err[k]
-                snap_to_add = p
-                time_to_add = times[k]
-                timestep_to_add = timesteps[k]
-        print('err_keep',err_keep)
+            p[:,k] = pde.load_solution(n=timesteps[k])
+            err[k] = np.linalg.norm(p[:,k] - u @ u.transpose() @ p[:,k])/np.linalg.norm(p[:,k])
+            # print(('%1.4e'%err[k]))
+        
+        nmax = 3
+        max_errs,idx = maxN(err, nmax)
+        for j in range(nmax):
+            snap_to_add = p[:,idx[j]]
+            time_to_add = times[idx[j]]
+            timestep_to_add = timesteps[idx[j]]
 
-        # add the snapshot with the max error to the data matrix, update controls and times_selected and timesteps_selected
-        if include[str(time_to_add)] == [0]:
-            snapshots.append(snap_to_add)
-            controls['time'].append(time_to_add)
-            timesteps_selected.append(timestep_to_add)
-            times_selected.append(time_to_add)
-            # update the include dict
-            include[str(time_to_add)] = [1]
-            # compute the new pod basis
-            del pod # clearing pod just to be sure?
-            pod = podtools.PODMultivariate(remove_mean=False)
-            pod.database_append(controls, snapshots)
-            pod.setup_basis()
-            pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
+            # add the snapshot with the max error to the data matrix, update controls and times_selected and timesteps_selected
+            if include[str(time_to_add)] == [0]:
+                snapshots.append(snap_to_add)
+                
+                controls['time'].append(time_to_add)
+                timesteps_selected.append(timestep_to_add)
+                times_selected.append(time_to_add)
+                # update the include dict
+                include[str(time_to_add)] = [1]
+        # compute the new pod basis
+        del pod # clearing pod just to be sure?
+        pod = podtools.PODMultivariate(remove_mean=False)
+        pod.database_append(controls, snapshots)
+        pod.setup_basis()
+        pod.setup_interpolant(rbf_type='polyh', bounds_auto=True)
 
-            print('np.shape(pod.phi_normalized)[1]',np.shape(pod.phi_normalized)[1])
+        print('np.shape(pod.phi_normalized)[1]',np.shape(pod.phi_normalized)[1])
 
-            # compute and plot errors
-            measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
-            fig = plt.figure()
-            ax1 = plt.gca()
-            ax1.scatter(times,err,marker='.',color=color_1)
-            ax1.set_xlabel('t')
-            ax1.set_ylabel('Log(||p - U U^T p||/||p||)',color=color_1)
-            ax1.set_yscale('log')
-            ax1.set_ylim(1e-16,1e0)
-            #ax.legend(('LOO l2'))
-            ax1.tick_params(axis='y', labelcolor=color_1)
-            ax1.set_title('POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
+        err_l2 = np.zeros((len(times)))
+        m = 0
+        for k in range((len(timesteps))):
+            x0 = pod.evaluate([times[k]])
+            forward_sol = np.array(pde.load_solution(n=timesteps[k]))
+            diff = forward_sol - x0
+            err_l2[m] = eval_error(diff,norm_type="l2")
+            m += 1
 
-            ax2 = ax1.twinx()
-            ax2.scatter(times_selected,measure_l2,marker='^',color=color_3)
-            ax2.set_ylabel('Log(LOOCV l2 Error)',color=color_3)
-            ax2.set_yscale('log')
-            ax2.set_ylim(1e-5,1e1)
-            ax2.tick_params(axis='y', labelcolor=color_3)
+        # compute and plot errors
+        measure_l2 = np.absolute(podtools.rbf_loocv(pod, norm_type="l2"))
+        fig, (ax1, ax2) = plt.subplots(1,2,figsize=(12,8))
+        ax1.scatter(times,err,marker='.',color=color_1)
+        ax1.set_xlabel('t')
+        ax1.set_ylabel('Log(||p - U U^T p||/||p||)',color=color_1)
+        ax1.set_yscale('log')
+        ax1.set_ylim(1e-16,1e1)
+        #ax.legend(('LOO l2'))
+        ax1.tick_params(axis='y', labelcolor=color_1)
+        ax1.set_title('POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
 
-            fig.tight_layout()
-            fig.savefig('adaptive_basis_err' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
+        ax1b = ax1.twinx()
+        ax1b.scatter(times_selected,measure_l2,marker='^',color=color_3)
+        ax1b.set_ylabel('Log(LOOCV l2 Error)',color=color_3)
+        ax1b.set_yscale('log')
+        ax1b.set_ylim(1e-16,1e1)
+        ax1b.tick_params(axis='y', labelcolor=color_3)
 
+        ax2.scatter(times,err_l2,marker='.',color=color_4)
+        ax2.set_xlabel('t')
+        ax2.set_ylabel('Log(True Error)',color=color_4)
+        ax2.set_yscale('log')
+        ax2.set_ylim(1e-16,1e1)
+        #ax.legend(('LOO l2'))
+        ax2.tick_params(axis='y', labelcolor=color_4)
+        #ax2.set_title('POD basis of size: ' + str(np.shape(pod.phi_normalized)[1]))
+
+        '''
+        ax2b = ax1.twinx()
+        ax2b.scatter(times_selected,measure_l2,marker='^',color=color_3)
+        ax2b.set_ylabel('Log(LOOCV l2 Error)',color=color_3)
+        ax2b.set_yscale('log')
+        ax2b.set_ylim(1e-5,1e1)
+        ax2b.tick_params(axis='y', labelcolor=color_3)
+        '''
+        fig.tight_layout()
+        # plt.show()
+        fig.savefig('adaptive_basis_max3_err_' + str(np.shape(pod.phi_normalized)[1]) + '.png',dpi=400)
     return 
 
 def rbf_experiment():
